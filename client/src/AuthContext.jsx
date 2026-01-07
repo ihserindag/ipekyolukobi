@@ -16,21 +16,26 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = async (username, password) => {
-        const response = await fetch('http://localhost:3001/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
+        try {
+            const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
 
-        if (response.ok) {
-            const data = await response.json();
-            localStorage.setItem('token', data.token);
-            localStorage.setItem('user', JSON.stringify(data.user));
-            setUser(data.user);
-            return { success: true };
-        } else {
-            const error = await response.json();
-            return { success: false, message: error.message };
+            if (response.ok) {
+                const data = await response.json();
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('user', JSON.stringify(data.user));
+                setUser(data.user);
+                return { success: true };
+            } else {
+                const error = await response.json();
+                return { success: false, message: error.message };
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            return { success: false, message: 'Sunucu hatası veya bağlantı sorunu.' };
         }
     };
 

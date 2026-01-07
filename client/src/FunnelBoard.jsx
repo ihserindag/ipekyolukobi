@@ -20,7 +20,7 @@ import { CSS } from '@dnd-kit/utilities';
 import FunnelChart from './components/FunnelChart';
 import useCustomerStore from './stores/customerStore';
 
-const API_URL = 'http://localhost:3001/api';
+const API_URL = '/api';
 
 // Sortable Card Component
 function SortableCard({ customer, theme, onCardClick }) {
