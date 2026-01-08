@@ -1,4 +1,4 @@
-const db = require('../db/database');
+const { getDatabase } = require('../db/database');
 const { parseJSON, stringifyJSON } = require('../utils/jsonUtils');
 
 const jsonFields = ['oncekiDestekler', 'yatirimPlani', 'cariDurum', 'iletisim', 'islemler', 'projeler'];
@@ -20,6 +20,7 @@ const getAllCustomers = (req, res) => {
     }
 
     try {
+        const db = getDatabase();
         const rows = db.prepare(query).all(...params);
         const parsedRows = rows.map(parseCustomer);
         res.json(parsedRows);
@@ -30,6 +31,7 @@ const getAllCustomers = (req, res) => {
 
 const getArchivedCustomers = (req, res) => {
     try {
+        const db = getDatabase();
         const rows = db.prepare('SELECT * FROM customers WHERE is_archived = 1').all();
         const parsedRows = rows.map(parseCustomer);
         res.json(parsedRows);
@@ -40,6 +42,7 @@ const getArchivedCustomers = (req, res) => {
 
 const createCustomer = (req, res) => {
     try {
+        const db = getDatabase();
         const customer = stringifyCustomer(req.body);
         const info = db.prepare(`
             INSERT INTO customers (
@@ -67,6 +70,7 @@ const createCustomer = (req, res) => {
 const updateCustomer = (req, res) => {
     const { id } = req.params;
     try {
+        const db = getDatabase();
         const customer = stringifyCustomer(req.body);
         db.prepare(`
             UPDATE customers SET
@@ -91,6 +95,7 @@ const updateCustomer = (req, res) => {
 const archiveCustomer = (req, res) => {
     const { id } = req.params;
     try {
+        const db = getDatabase();
         db.prepare('UPDATE customers SET is_archived = 1 WHERE id = ?').run(id);
         res.json({ success: true });
     } catch (error) {
@@ -101,6 +106,7 @@ const archiveCustomer = (req, res) => {
 const restoreCustomer = (req, res) => {
     const { id } = req.params;
     try {
+        const db = getDatabase();
         db.prepare('UPDATE customers SET is_archived = 0 WHERE id = ?').run(id);
         res.json({ success: true });
     } catch (error) {

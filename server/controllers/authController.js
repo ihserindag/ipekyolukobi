@@ -1,4 +1,4 @@
-const db = require('../db/database');
+const { getDatabase } = require('../db/database');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -6,6 +6,7 @@ const SECRET_KEY = 'kobi-crm-gizli-anahtar'; // Bunu merkezi bir konfigürasyon 
 
 const login = (req, res) => {
     const { username, password } = req.body;
+    const db = getDatabase();
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
 
     if (user && bcrypt.compareSync(password, user.password)) {

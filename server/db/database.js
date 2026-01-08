@@ -1,20 +1,59 @@
-const sqlite = require('better-sqlite3');
+const initSqlJs = require('sql.js');
 const path = require('path');
+const fs = require('fs');
 const bcrypt = require('bcryptjs');
 
-// Veritabanı bağlantısı
+// Veritabanı dosya yolu
 const dbPath = path.join(__dirname, '..', 'database.db');
-let db;
-try {
-    db = sqlite(dbPath);
-} catch (error) {
-    console.error(`Failed to connect to database at ${dbPath}:`, error);
-    throw error;
+
+let db = null;
+let isReady = false;
+let readyPromise = null;
+
+// Veritabanını hazırla
+async function initDatabase() {
+    if (readyPromise) return readyPromise;
+    
+    readyPromise = (async () => {
+        try {
+            const SQL = await initSqlJs();
+            
+            // Mevcut veritabanı varsa yükle
+            if (fs.existsSync(dbPath)) {
+                const buffer = fs.readFileSync(dbPath);
+                db = new SQL.Database(buffer);
+                console.log('Existing database loaded from:', dbPath);
+            } else {
+                db = new SQL.Database();
+                console.log('New database created');
+            }
+            
+            initializeTables();
+            seedInitialData();
+            saveDatabase();
+            
+            isReady = true;
+            return db;
+        } catch (error) {
+            console.error('Database initialization error:', error);
+            throw error;
+        }
+    })();
+    
+    return readyPromise;
 }
 
-function initializeDatabase() {
-    // Tablo oluşturma
-    db.exec(`
+// Veritabanını diske kaydet
+function saveDatabase() {
+    if (!db) return;
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(dbPath, buffer);
+}
+
+// Tabloları oluştur
+function initializeTables() {
+    db.run(`
     CREATE TABLE IF NOT EXISTS customers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         firmaAdi TEXT,
@@ -39,7 +78,9 @@ function initializeDatabase() {
         yetkiliSifre TEXT,
         is_archived INTEGER DEFAULT 0
     );
+    `);
 
+    db.run(`
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE,
@@ -49,13 +90,17 @@ function initializeDatabase() {
         customer_id INTEGER,
         permissions TEXT
     );
+    `);
 
+    db.run(`
     CREATE TABLE IF NOT EXISTS project_templates (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE,
         stages TEXT
     );
+    `);
 
+    db.run(`
     CREATE TABLE IF NOT EXISTS funnel_stages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         customer_id INTEGER NOT NULL,
@@ -67,13 +112,9 @@ function initializeDatabase() {
     `);
 
     // Kolonları programatik olarak ekle (mevcut veriler için) - Hata yoksay
-    try { db.prepare('ALTER TABLE customers ADD COLUMN is_archived INTEGER DEFAULT 0').run(); } catch (e) { /* no-op */ }
-    try { db.prepare('ALTER TABLE users ADD COLUMN customer_id INTEGER').run(); } catch (e) { /* no-op */ }
-    try { db.prepare('ALTER TABLE users ADD COLUMN permissions TEXT').run(); } catch (e) { /* no-op */ }
-
-
-    // Başlangıç verilerini ekle (eğer tablolar boşsa)
-    seedInitialData();
+    try { db.run('ALTER TABLE customers ADD COLUMN is_archived INTEGER DEFAULT 0'); } catch (e) { /* no-op */ }
+    try { db.run('ALTER TABLE users ADD COLUMN customer_id INTEGER'); } catch (e) { /* no-op */ }
+    try { db.run('ALTER TABLE users ADD COLUMN permissions TEXT'); } catch (e) { /* no-op */ }
 }
 
 function seedInitialData() {
@@ -84,7 +125,9 @@ function seedInitialData() {
 }
 
 function seedCustomers() {
-    const customerCount = db.prepare('SELECT COUNT(*) as count FROM customers').get().count;
+    const result = db.exec('SELECT COUNT(*) as count FROM customers');
+    const customerCount = result.length > 0 ? result[0].values[0][0] : 0;
+    
     if (customerCount === 0) {
         const initialCustomers = [
             {
@@ -126,36 +169,40 @@ function seedCustomers() {
                 }]
             }
         ];
-        const insert = db.prepare(`
-            INSERT INTO customers (
-            firmaAdi, naceKodu, faaliyetKonusu, kurulusYili, sonYilCiro, calisanSayisi,
-            adres, oncekiDestekler, yetkiliAdi, vergiNo, yetkiliTC, oda,
-            yatirimPlani, cariDurum, ekAciklamalar, iletisim, durum, islemler, projeler, yetkiliSifre, is_archived
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
+        
         initialCustomers.forEach(c => {
-            insert.run(
+            db.run(`
+                INSERT INTO customers (
+                firmaAdi, naceKodu, faaliyetKonusu, kurulusYili, sonYilCiro, calisanSayisi,
+                adres, oncekiDestekler, yetkiliAdi, vergiNo, yetkiliTC, oda,
+                yatirimPlani, cariDurum, ekAciklamalar, iletisim, durum, islemler, projeler, yetkiliSifre, is_archived
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
                 c.firmaAdi, c.naceKodu, c.faaliyetKonusu, c.kurulusYili, c.sonYilCiro, c.calisanSayisi,
                 c.adres, JSON.stringify(c.oncekiDestekler), c.yetkiliAdi, c.vergiNo, c.yetkiliTC, c.oda,
                 JSON.stringify(c.yatirimPlani), JSON.stringify(c.cariDurum), c.ekAciklamalar,
                 JSON.stringify(c.iletisim), c.durum, JSON.stringify(c.islemler), JSON.stringify(c.projeler), '', 0
-            );
+            ]);
         });
     }
 }
 
 function seedUsers() {
-    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+    const result = db.exec('SELECT COUNT(*) as count FROM users');
+    const userCount = result.length > 0 ? result[0].values[0][0] : 0;
+    
     if (userCount === 0) {
         const adminPassword = bcrypt.hashSync('admin123', 10);
         const userPassword = bcrypt.hashSync('user123', 10);
-        db.prepare('INSERT INTO users (username, password, role, fullName) VALUES (?, ?, ?, ?)').run('admin', adminPassword, 'admin', 'Sistem Yöneticisi');
-        db.prepare('INSERT INTO users (username, password, role, fullName) VALUES (?, ?, ?, ?)').run('user', userPassword, 'user', 'Standart Kullanıcı');
+        db.run('INSERT INTO users (username, password, role, fullName) VALUES (?, ?, ?, ?)', ['admin', adminPassword, 'admin', 'Sistem Yöneticisi']);
+        db.run('INSERT INTO users (username, password, role, fullName) VALUES (?, ?, ?, ?)', ['user', userPassword, 'user', 'Standart Kullanıcı']);
     }
 }
 
 function seedProjectTemplates() {
-    const templateCount = db.prepare('SELECT COUNT(*) as count FROM project_templates').get().count;
+    const result = db.exec('SELECT COUNT(*) as count FROM project_templates');
+    const templateCount = result.length > 0 ? result[0].values[0][0] : 0;
+    
     if (templateCount === 0) {
         const defaultTemplates = {
             'KOBİGEL': [
@@ -196,29 +243,87 @@ function seedProjectTemplates() {
                 { baslik: 'Aşama 3', sure: 7 }, { baslik: 'Aşama 4', sure: 7 }, { baslik: 'Aşama 5', sure: 7 }
             ]
         };
-        const insertTemplate = db.prepare('INSERT INTO project_templates (name, stages) VALUES (?, ?)');
+        
         Object.entries(defaultTemplates).forEach(([name, stages]) => {
-            insertTemplate.run(name, JSON.stringify(stages));
+            db.run('INSERT INTO project_templates (name, stages) VALUES (?, ?)', [name, JSON.stringify(stages)]);
         });
     }
 }
 
 function seedFunnelStages() {
-    const funnelCount = db.prepare('SELECT COUNT(*) as count FROM funnel_stages').get().count;
+    const result = db.exec('SELECT COUNT(*) as count FROM funnel_stages');
+    const funnelCount = result.length > 0 ? result[0].values[0][0] : 0;
+    
     if (funnelCount === 0) {
-        const customers = db.prepare('SELECT id, durum FROM customers').all();
-        const insertStage = db.prepare('INSERT INTO funnel_stages (customer_id, stage, notes) VALUES (?, ?, ?)');
-        customers.forEach(customer => {
-            let stage = 'Potansiyel'; // Default
-            if (customer.durum === 'aktif') stage = 'Aktif';
-            else if (customer.durum === 'hedef') stage = 'Hedef';
-            insertStage.run(customer.id, stage, 'Mevcut sistem verilerinden otomatik eklendi');
-        });
+        const customersResult = db.exec('SELECT id, durum FROM customers');
+        if (customersResult.length > 0) {
+            const columns = customersResult[0].columns;
+            const values = customersResult[0].values;
+            values.forEach(row => {
+                const customer = {};
+                columns.forEach((col, i) => customer[col] = row[i]);
+                
+                let stage = 'Potansiyel';
+                if (customer.durum === 'aktif') stage = 'Aktif';
+                else if (customer.durum === 'hedef') stage = 'Hedef';
+                db.run('INSERT INTO funnel_stages (customer_id, stage, notes) VALUES (?, ?, ?)', 
+                    [customer.id, stage, 'Mevcut sistem verilerinden otomatik eklendi']);
+            });
+        }
     }
 }
 
-// Veritabanını başlat
-initializeDatabase();
+// Helper fonksiyonlar - better-sqlite3 uyumlu API sağlar
+function getDatabase() {
+    if (!db) throw new Error('Database not initialized. Call initDatabase() first.');
+    return {
+        // Tek satır döndür
+        prepare: (sql) => ({
+            get: (...params) => {
+                const result = db.exec(sql, params);
+                if (result.length === 0) return undefined;
+                const columns = result[0].columns;
+                const values = result[0].values[0];
+                if (!values) return undefined;
+                const row = {};
+                columns.forEach((col, i) => row[col] = values[i]);
+                return row;
+            },
+            all: (...params) => {
+                const result = db.exec(sql, params);
+                if (result.length === 0) return [];
+                const columns = result[0].columns;
+                return result[0].values.map(values => {
+                    const row = {};
+                    columns.forEach((col, i) => row[col] = values[i]);
+                    return row;
+                });
+            },
+            run: (...params) => {
+                db.run(sql, params);
+                saveDatabase();
+                return { 
+                    changes: db.getRowsModified(),
+                    lastInsertRowid: getLastInsertRowId()
+                };
+            }
+        }),
+        exec: (sql) => {
+            db.run(sql);
+            saveDatabase();
+        }
+    };
+}
 
-// db örneğini dışa aktar
-module.exports = db;
+function getLastInsertRowId() {
+    const result = db.exec('SELECT last_insert_rowid() as id');
+    return result.length > 0 ? result[0].values[0][0] : 0;
+}
+
+// Module exports
+module.exports = {
+    initDatabase,
+    getDatabase,
+    saveDatabase,
+    isReady: () => isReady
+};

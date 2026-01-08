@@ -1,11 +1,12 @@
-const db = require('../db/database');
-const { parseJSON } = require('../utils/jsonUtils'); // JSON yardımcı fonksiyonlarını merkezi bir yerden alacağız
+const { getDatabase } = require('../db/database');
+const { parseJSON } = require('../utils/jsonUtils');
 
 const jsonFields = ['oncekiDestekler', 'yatirimPlani', 'cariDurum', 'iletisim', 'islemler', 'projeler'];
 const parseCustomer = parseJSON(jsonFields);
 
 const getFunnelAnalytics = (req, res) => {
     try {
+        const db = getDatabase();
         const stageCounts = db.prepare(`
             SELECT stage, COUNT(customer_id) as count
             FROM funnel_stages
@@ -36,6 +37,7 @@ const getFunnelAnalytics = (req, res) => {
 
 const getKanbanData = (req, res) => {
     try {
+        const db = getDatabase();
         const query = `
             SELECT
                 c.*,
@@ -74,6 +76,7 @@ const getKanbanData = (req, res) => {
 
 const moveCustomerStage = (req, res) => {
     try {
+        const db = getDatabase();
         const { customerId, newStage } = req.body;
 
         if (!['Potansiyel', 'Aktif', 'Hedef'].includes(newStage)) {
@@ -101,6 +104,7 @@ const moveCustomerStage = (req, res) => {
 
 const updateStageNotes = (req, res) => {
     try {
+        const db = getDatabase();
         const { customerId, notes } = req.body;
         db.prepare('UPDATE funnel_stages SET notes = ? WHERE customer_id = ?').run(notes, customerId);
         res.json({ success: true });

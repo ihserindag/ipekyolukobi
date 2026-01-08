@@ -1,7 +1,8 @@
-const db = require('../db/database');
+const { getDatabase } = require('../db/database');
 
 const getAllUsers = (req, res) => {
     try {
+        const db = getDatabase();
         const rows = db.prepare('SELECT id, username, role, fullName, customer_id, permissions FROM users').all();
         const parsedRows = rows.map(row => ({
             ...row,
@@ -17,6 +18,7 @@ const updateUser = (req, res) => {
     const { id } = req.params;
     const { customer_id, permissions, fullName } = req.body;
     try {
+        const db = getDatabase();
         db.prepare('UPDATE users SET customer_id = ?, permissions = ?, fullName = ? WHERE id = ?')
             .run(customer_id, JSON.stringify(permissions), fullName, id);
         res.json({ success: true });

@@ -5,7 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const bodyParser = require('body-parser');
-require('./db/database'); // Veritabanını başlatır ve bağlantıyı kurar
+const { initDatabase } = require('./db/database');
 
 // Rotaları içeri aktar
 const authRoutes = require('./routes/authRoutes');
@@ -44,6 +44,14 @@ app.use((err, req, res, next) => {
     res.status(500).send('Sunucuda bir hata oluştu!');
 });
 
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-});
+// Veritabanını başlat ve sonra sunucuyu çalıştır
+initDatabase()
+    .then(() => {
+        app.listen(port, () => {
+            console.log(`Server running at http://localhost:${port}`);
+        });
+    })
+    .catch(err => {
+        console.error('Failed to initialize database:', err);
+        process.exit(1);
+    });

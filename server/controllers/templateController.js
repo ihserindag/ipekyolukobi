@@ -1,7 +1,8 @@
-const db = require('../db/database');
+const { getDatabase } = require('../db/database');
 
 const getAllTemplates = (req, res) => {
     try {
+        const db = getDatabase();
         const rows = db.prepare('SELECT * FROM project_templates').all();
         const parsedRows = rows.map(row => ({
             ...row,
@@ -16,6 +17,7 @@ const getAllTemplates = (req, res) => {
 const createTemplate = (req, res) => {
     const { name, stages } = req.body;
     try {
+        const db = getDatabase();
         const info = db.prepare('INSERT INTO project_templates (name, stages) VALUES (?, ?)').run(name, JSON.stringify(stages));
         res.status(201).json({ id: info.lastInsertRowid, name, stages });
     } catch (error) {
@@ -26,6 +28,7 @@ const createTemplate = (req, res) => {
 const deleteTemplate = (req, res) => {
     const { id } = req.params;
     try {
+        const db = getDatabase();
         db.prepare('DELETE FROM project_templates WHERE id = ?').run(id);
         res.json({ success: true });
     } catch (error) {
