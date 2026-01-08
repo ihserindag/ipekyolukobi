@@ -1,0 +1,5 @@
+node_modules
+deploy
+startup_error.log
+.env
+.DS_Store

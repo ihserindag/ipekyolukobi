@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -30,7 +31,7 @@ app.use('/api/templates', templateRoutes);
 app.use('/api/funnel', funnelRoutes);
 
 // React Statik Dosyalarını Sunma (Production Modu)
-const path = require('path');
+
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
 app.get(/(.*)/, (req, res) => {

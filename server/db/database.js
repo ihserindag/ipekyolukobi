@@ -3,7 +3,14 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 
 // Veritabanı bağlantısı
-const db = sqlite(path.join(__dirname, '..', 'database.db'));
+const dbPath = path.join(__dirname, '..', 'database.db');
+let db;
+try {
+    db = sqlite(dbPath);
+} catch (error) {
+    console.error(`Failed to connect to database at ${dbPath}:`, error);
+    throw error;
+}
 
 function initializeDatabase() {
     // Tablo oluşturma
