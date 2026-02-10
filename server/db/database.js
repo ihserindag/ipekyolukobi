@@ -4,7 +4,19 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 
 // Veritabanı dosya yolu
-const dbPath = path.join(__dirname, '..', 'database.db');
+// Veritabanı dosya yolu - Persistent volume için /app/data veya proje kökünde data klasörü
+const dbPath = process.env.DB_PATH || path.join(__dirname, '..', '..', 'data', 'database.db');
+
+// Data klasörünün varlığını kontrol et ve yoksa oluştur
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+    try {
+        fs.mkdirSync(dbDir, { recursive: true });
+        console.log('Created database directory:', dbDir);
+    } catch (err) {
+        console.error('Error creating database directory:', err);
+    }
+}
 
 let db = null;
 let isReady = false;
